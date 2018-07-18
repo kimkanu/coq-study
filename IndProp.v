@@ -1822,7 +1822,23 @@ Proof.
        forall l, pal l -> l = rev l.
 *)
 
-(* FILL IN HERE *)
+Inductive pal {X: Type} : list X -> Prop :=
+| PalEmpty: pal []
+| PalChar: forall x: X, pal [x]
+| PalApp: forall (x: X) (l: list X), pal l -> pal (x :: l ++ [x]).
+
+Theorem pal_app_rev : forall (X: Type) (l: list X), pal (l ++ rev l).
+Proof.
+  intros. induction l.
+  - simpl. apply PalEmpty.
+  - simpl. rewrite -> app_assoc. apply (PalApp x (l ++ rev l)). apply IHl. Qed.
+
+Theorem pal_rev : forall (X: Type) (l: list X), pal l -> l = rev l.
+Proof.
+  intros. induction H.
+  - reflexivity.
+  - reflexivity.
+  - simpl. rewrite -> rev_app_distr. simpl. rewrite <- IHpal. reflexivity. Qed.
 (** [] *)
 
 (** **** Exercise: 5 stars, optional (palindrome_converse)  *)
@@ -1833,7 +1849,61 @@ Proof.
      forall l, l = rev l -> pal l.
 *)
 
-(* FILL IN HERE *)
+Theorem palindrome_converse : forall (X: Type) (l: list X), l = rev l -> pal l.
+Proof.
+  assert (EV: forall n, (evenb n = true -> ev n) /\ (evenb (S n) = true -> ev (S n))).
+  { induction n.
+    - simpl. split. intros. apply ev_0. intros. inversion H.
+    - destruct IHn. split. apply H0. simpl. intros. apply ev_SS. apply H. apply H1. }
+  intros X l. remember (length l) as n. remember (evenb n) as b. destruct b.
+  - (* even length *)
+    assert (ev n). { destruct (EV n). symmetry in Heqb. apply H. apply Heqb. }
+    assert (exists k, n = double k). { apply ev_even. apply H. }
+    assert (forall (x: nat) (s: list X), length s = double x -> s = rev s -> pal s).
+    { induction x.
+      - intros. assert (s = []). { destruct s. reflexivity. inversion H1. }
+        rewrite -> H3. apply PalEmpty.
+      - intros. simpl in H1. destruct s. inversion H1. remember (rev s) as r.
+        assert (rev r = s). { rewrite -> Heqr. apply rev_involutive. }
+        rewrite <- H3. destruct r. simpl. apply PalChar. (* In fact, it is a contradictory case. *)
+        rewrite <- H3 in H2. simpl in H2. assert ([x1] = rev [x1]). { reflexivity. }
+        assert (rev (rev r ++ [x1]) = x1 :: r).
+        { rewrite -> H4. rewrite <- rev_app_distr. rewrite -> rev_involutive. reflexivity. }
+        rewrite -> H5 in H2. simpl in H2.
+        inversion H2. rewrite <- H5. rewrite -> rev_involutive. apply PalApp. apply IHx.
+        simpl in H1. apply S_injective in H1. rewrite <- H3 in H1.
+        assert (x1 :: r = [x1] ++ r). { reflexivity. } rewrite -> H6 in H1.
+        rewrite -> rev_app_distr in H1. rewrite -> app_length in H1. simpl in H1.
+        rewrite -> plus_comm in H1. simpl in H1. apply S_injective in H1. apply H1.
+        assert (rev [x1] ++ rev (rev r) = rev (rev [x1]) ++ rev r).
+        { rewrite <- rev_app_distr. rewrite -> H8. rewrite <- rev_app_distr. reflexivity. }
+        simpl in H6. inversion H6. rewrite -> H10. symmetry. apply H10.
+    }
+    destruct H0. apply (H1 x l). rewrite <- Heqn. apply H0.
+  - (* odd length *)
+    assert (ev (pred n)). { remember (pred n) as s. destruct (EV s). symmetry in Heqb. apply H.
+      assert (S s = n). { rewrite -> Heqs. destruct n. simpl. inversion Heqb. rewrite <- pred_Sn. reflexivity. }
+      rewrite <- H1 in Heqb. rewrite -> evenb_S in Heqb. assert (negb (negb (evenb s)) = negb false).
+      { simpl. rewrite -> Heqb. reflexivity. } simpl in H2. rewrite -> negb_involutive in H2. apply H2. }
+    assert (exists k, pred n = double k). { apply (ev_even (pred n)). apply H. }
+    assert (exists k, n = S (double k)). { destruct H0. exists x. destruct n. inversion Heqb. rewrite <- pred_Sn in H0.
+      rewrite <- H0. reflexivity. }
+    assert (forall (x: nat) (s: list X), length s = S (double x) -> s = rev s -> pal s).
+    { induction x.
+      - intros. assert (exists c: X, s = [c]). { destruct s. inversion H2. simpl in H2. apply S_injective in H2.
+        assert (s = []). { destruct s. reflexivity. inversion H2. } exists x. rewrite -> H4. reflexivity. }
+        destruct H4. rewrite -> H4. apply PalChar.
+      - intros. simpl in H2. destruct s. inversion H2. simpl in H3. remember (rev s) as r.
+        assert (rev r = s). { rewrite -> Heqr. apply rev_involutive. }
+        rewrite <- H4. destruct r. simpl. apply PalChar.
+        rewrite <- H4 in H3. simpl in H3. inversion H3.
+        assert (rev [x1] ++ rev (rev r) = rev (rev [x1]) ++ rev r).
+        { rewrite <- rev_app_distr. rewrite -> H7. rewrite <- rev_app_distr. reflexivity. }
+        simpl in H5. inversion H5. simpl. apply (PalApp x1).
+        apply IHx. rewrite <- H4 in H2. simpl in H2. rewrite -> app_length in H2.
+        rewrite -> plus_comm in H2. simpl in H2. apply S_injective in H2. apply S_injective in H2. apply H2.
+        symmetry. apply H9. }
+    destruct H1. apply (H2 x). rewrite -> Heqn in H1. apply H1. Qed.
 (** [] *)
 
 (** **** Exercise: 4 stars, advanced, optional (NoDup)  *)
@@ -1882,14 +1952,22 @@ Lemma in_split : forall (X:Type) (x:X) (l:list X),
   In x l ->
   exists l1 l2, l = l1 ++ x :: l2.
 Proof.
-  (* FILL IN HERE *) Admitted.
+  intros X x. induction l.
+  - intros. inversion H.
+  - intros. inversion H.
+    + exists [], l. rewrite -> H0. reflexivity.
+    + apply IHl in H0. destruct H0. destruct H0.
+      exists (x0 :: x1), x2. rewrite -> H0.
+      assert (L: forall (p: X) (s: list X), p :: s = [p] ++ s). { reflexivity. }
+      rewrite -> L. rewrite -> app_assoc. simpl. reflexivity. Qed.
 
 (** Now define a property [repeats] such that [repeats X l] asserts
     that [l] contains at least one repeated element (of type [X]).  *)
 
 Inductive repeats {X:Type} : list X -> Prop :=
-  (* FILL IN HERE *)
-.
+| RFD: forall (x: X) (l: list X), In x l -> repeats (x :: l)
+| RL: forall (s: list X) (l: list X), repeats l -> repeats (s ++ l)
+| RR: forall (s: list X) (l: list X), repeats s -> repeats (s ++ l).
 
 (** Now, here's a way to formalize the pigeonhole principle.  Suppose
     list [l2] represents a list of pigeonhole labels, and list [l1]
@@ -1910,8 +1988,75 @@ Theorem pigeonhole_principle: forall (X:Type) (l1  l2:list X),
    length l2 < length l1 ->
    repeats l1.
 Proof.
-   intros X l1. induction l1 as [|x l1' IHl1'].
-  (* FILL IN HERE *) Admitted.
+  assert (SIneq: forall n m: nat, S n < S m -> n < m).
+  { induction m.
+    - intros. inversion H. inversion H1.
+    - unfold lt. apply (Sn_le_Sm__n_le_m (S n) (S m)). }
+  intros X l1. induction l1 as [|x l1' IHl1'].
+  - intros. inversion H1.
+  - intros. simpl in H0.
+    destruct l2.
+    + destruct (H0 x). left. reflexivity.
+    + simpl in H1. assert (EMX: x = x0 \/ x <> x0). { apply H. }
+      destruct EMX.
+      *  rewrite <- H2 in H0. 
+        assert (EML: In x l1' \/ ~ (In x l1')). { apply H. }
+        destruct EML.
+        apply (RFD x l1'). apply H3.
+        assert (A: forall y: X, In y l1' -> In y l2).
+        { intros. assert (x = y \/ In y l1'). { right. apply H4. }
+          apply H0 in H5. destruct H5. rewrite -> H5 in H3.
+          unfold not in H3. apply H3 in H4. inversion H4.
+          apply H5. }
+        apply (RL [x] l1'). apply (IHl1' l2). apply H. apply A.
+        apply (SIneq (length l2) (length l1')) in H1. apply H1.
+      * assert (EML: In x l1' \/ ~ (In x l1')). { apply H. }
+        destruct EML. apply (RFD x l1'). apply H3.
+        assert (EML: ~ (In x0 l1') \/ (In x0 l1')). { apply or_commut. apply H. }
+        destruct EML.
+        assert (A: forall x : X, x <> x0 /\ In x (x0 :: l2) -> In x l2). 
+        { intros. destruct H5. simpl in H6. destruct H6. symmetry in H6.
+          apply (contradiction_implies_anything (x1 = x0)). split. apply H6. apply H5.
+          apply H6. }
+        assert (B: forall x : X, In x l1' -> In x l2). 
+        { assert (forall x, In x l1' -> In x (x0 :: l2)). { intros. apply H0. right. apply H5. }
+          simpl in H5. intros y. intros. destruct (H5 y). apply H6. rewrite -> H7 in H4.
+          apply (contradiction_implies_anything (In y l1')). split. apply H6. apply H4. apply H7. }
+        apply (RL [x] l1'). apply (IHl1' l2). apply H. apply B.
+        apply (SIneq (length l2) (length l1')) in H1. apply H1.
+        apply (RL [x] l1').
+        assert (In x l2). { assert (In x (x0 :: l2)). { apply (H0 x). left. reflexivity. }
+          simpl in H5. destruct H5. apply (contradiction_implies_anything (x = x0)).
+          split. symmetry. apply H5. apply H2. apply H5. }
+        apply (in_split X x l2) in H5. destruct H5. destruct H5.
+        assert (C: forall x : X, In x l1' -> In x (x0 :: x1 ++ x2)).
+        { assert (forall y: X, In y l1' -> In y (x0 :: l2)).
+          intros. apply H0. right. apply H6.
+          rewrite -> H5 in H6.
+          intros y. intros. assert (y <> x).
+          unfold not. intros. rewrite -> H8 in H7. apply (contradiction_implies_anything (In x l1')).
+          split. apply H7. apply H3.
+          assert (L: forall (z: X) (s1 s2: list X), In z s1 \/ In z s2 <-> In z (s1 ++ s2)).
+          { intros z s1. split. induction s1. intros. simpl. destruct H9. inversion H9. apply H9.
+            simpl. intros. apply or_assoc in H9. destruct H9. left. apply H9.
+            apply IHs1 in H9. right. apply H9.
+            induction s1. simpl. intros. right. apply H9.
+            intros. simpl in H9. destruct H9. left. simpl. left. apply H9.
+            simpl. apply or_assoc. apply IHs1 in H9. right. apply H9. }
+          apply H6 in H7. rewrite <- (L y (x0 :: x1) (x :: x2)) in H7.
+          destruct H7. assert (x0 :: x1 ++ x2 = (x0 :: x1) ++ x2). { reflexivity. }
+          rewrite -> H9. rewrite <- L. left. apply H7.
+          simpl in H7. destruct H7. unfold not in H8. symmetry in H7. apply H8 in H7. inversion H7.
+          assert (x0 :: x1 ++ x2 = (x0 :: x1) ++ x2). { reflexivity. }
+          rewrite -> H9. rewrite <- (L y (x0 :: x1)). right. apply H7.
+        }
+        apply (IHl1' (x0 :: x1 ++ x2)).
+        apply H.
+        apply C.
+        assert (length l2 = length (x0 :: x1 ++ x2)).
+        { rewrite -> H5. rewrite -> app_length. simpl. rewrite -> app_length. symmetry. apply plus_n_Sm. }
+        rewrite <- H6. apply SIneq. apply H1. Qed.
+
 (** [] *)
 
 
